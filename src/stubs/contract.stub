@@ -1,0 +1,10 @@
+<?php
+
+namespace {{ namespace }};
+
+use RiseTech\Repository\Contracts\RepositoryInterface;
+
+interface {{ class }} extends RepositoryInterface
+{
+    public function entityOn();
+}
