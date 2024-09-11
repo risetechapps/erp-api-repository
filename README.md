@@ -11,7 +11,7 @@ This is where your description should go. Try and limit it to a paragraph or two
 You can install the package via composer:
 
 ```bash
-composer require risetech/repository
+composer require risetechapps/repository
 ```
 
 ## Usage
@@ -40,7 +40,7 @@ If you discover any security related issues, please email apps@risetech.com.br i
 
 ## Credits
 
--   [Rise Tech](https://github.com/risetech)
+-   [Rise Tech](https://github.com/risetechapps)
 -   [All Contributors](../../contributors)
 
 ## License
