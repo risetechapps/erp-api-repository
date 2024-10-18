@@ -12,10 +12,13 @@ use RiseTech\Repository\Repository;
 
 abstract class BaseRepository implements RepositoryInterface
 {
-    protected $entity;
+    public $entity;
     protected Carbon $tll;
     protected $driver;
     protected bool $supportTag = false;
+    protected string $permission = '';
+    protected $relationships = [];
+    protected string|int $id;
 
     /**
      * @throws NotEntityDefinedException
@@ -31,7 +34,7 @@ abstract class BaseRepository implements RepositoryInterface
     /**
      * @throws NotEntityDefinedException
      */
-    public function resolveEntity()
+    public function resolveEntity(): mixed
     {
         if (!method_exists($this, 'entity')) {
             throw new NotEntityDefinedException;
@@ -42,7 +45,9 @@ abstract class BaseRepository implements RepositoryInterface
     public function Trashed(): bool
     {
         if ($this->containsSoftDelete()) {
-            // Implementa validação de usuário, se necessário.
+            if (auth()->check() && auth()->hasPermission($this->permission)) {
+                return true;
+            }
         }
         return false;
     }
@@ -62,7 +67,7 @@ abstract class BaseRepository implements RepositoryInterface
         return $name;
     }
 
-    private function rememberCache(callable $call, string $method, array $parameters = [])
+    public function rememberCache(callable $call, string $method, array $parameters = [])
     {
         $cacheKey = $this->getQualifyTagCache($method, $parameters);
 
@@ -73,61 +78,82 @@ abstract class BaseRepository implements RepositoryInterface
         }
     }
 
-    public function clearCacheForMethod(string $method, array $parameters = []): void
+    public function clearCacheForEntity(string $method = '', array $parameters = []): void
     {
-        $cacheKey = $this->getQualifyTagCache($method, $parameters);
-
-        if($this->supportTag){
-            Cache::tags([get_class($this->entity)])->forget($cacheKey);
-        }else{
-            Cache::forget($cacheKey);
-        }
-
-        dispatch(new RegenerateCacheJob($this, $method, $parameters));
-
-    }
-
-    public function clearCacheForEntity(): void
-    {
-        if($this->supportTag){
+        if ($this->supportTag) {
             Cache::tags([get_class($this->entity)])->flush();
         }
-        dispatch(new RegenerateCacheJob($this, 'getAll'));
 
+        dispatch(new RegenerateCacheJob($this, [
+            Repository::$methodFirst,
+            Repository::$methodAll,
+            Repository::$methodFind,
+            Repository::$methodFindWhere,
+            Repository::$methodFindWhereEmail,
+            Repository::$methodFindWhereFirst,
+            Repository::$methodDataTable,
+            Repository::$methodOrder,
+        ], $parameters));
+
+        $this->clearParameterizedCaches($method, $parameters);
     }
 
-    public function getAll()
+    private function clearParameterizedCaches(string $method, array $parameters): void
+    {
+        $paramsHash = !empty($parameters) ? '_' . md5(json_encode($parameters)) : '';
+        $cacheKeyPattern = DIRECTORY_SEPARATOR . $method . $paramsHash;
+
+        if ($this->supportTag) {
+            Cache::tags([get_class($this->entity)])->forget($cacheKeyPattern);
+            Cache::tags([get_class($this->entity)])->flush();
+        }
+    }
+
+    public function find($id): static
+    {
+        $this->id = $id;
+        return $this;
+    }
+
+    public function first()
     {
         return $this->rememberCache(function () {
-            return $this->Trashed() ? $this->entity->withTrashed(true)->get() : $this->entity->all();
+            return $this->applySoftDeletes($this->entity)->first();
+        }, Repository::$methodFirst);
+    }
+
+    public function get()
+    {
+        return $this->rememberCache(function () {
+            return $this->applySoftDeletes($this->entity)->get();
         }, Repository::$methodAll);
     }
 
     public function findById($id)
     {
         return $this->rememberCache(function () use ($id) {
-            return $this->entity->withTrashed($this->Trashed())->find($id);
+            return $this->applySoftDeletes($this->entity)->find($id);
         }, Repository::$methodFind, [$id]);
     }
 
     public function findWhere($column, $valor)
     {
         return $this->rememberCache(function () use ($column, $valor) {
-            return $this->entity->withTrashed($this->Trashed())->where($column, $valor)->get();
+            return $this->applySoftDeletes($this->entity)->where($column, $valor)->get();
         }, Repository::$methodFindWhere, [$column, $valor]);
     }
 
     public function findWhereEmail($valor)
     {
         return $this->rememberCache(function () use ($valor) {
-            return $this->entity->withTrashed($this->Trashed())->where('email', $valor)->get();
+            return $this->applySoftDeletes($this->entity)->where('email', $valor)->get();
         }, Repository::$methodFindWhereEmail, [$valor]);
     }
 
     public function findWhereFirst($column, $valor)
     {
         return $this->rememberCache(function () use ($column, $valor) {
-            return $this->entity->withTrashed($this->Trashed())->where($column, $valor)->first();
+            return $this->applySoftDeletes($this->entity)->where($column, $valor)->first();
         }, Repository::$methodFindWhereFirst, [$column, $valor]);
     }
 
@@ -141,7 +167,6 @@ abstract class BaseRepository implements RepositoryInterface
     public function update($id, array $data)
     {
         $updated = $this->findById($id)->update($data);
-        $this->clearCacheForMethod('FIND', [$id]);
         $this->clearCacheForEntity();
 
         return $updated;
@@ -156,44 +181,66 @@ abstract class BaseRepository implements RepositoryInterface
         }
     }
 
-    public function delete($id)
+    public function delete(): bool
     {
-        $deleted = $this->entity->find($id)->delete();
+        $model = $this->entity->find($this->id);
 
-        $this->clearCacheForMethod('FIND', [$id]);
+        if (!$model) return false;
+
+        $id = $model->getKey();
+
+        foreach ($this->relationships as $relationship) {
+            $model->$relationship()->delete();
+        }
+
+        $deleted = $model->delete();
+
         $this->clearCacheForEntity();
 
         return $deleted;
     }
 
-    public function destroy($id)
+    public function restore(): bool
     {
-        $destroyed = $this->findById($id)->forceDelete();
+        $model = $this->entity->withTrashed(true)->find($this->id);
+        $id = $model->getKey();
 
-        $this->clearCacheForMethod('FIND', [$id]);
-        $this->clearCacheForEntity();
+        foreach ($this->relationships as $relationship) {
+            $model->$relationship()->restore();
+        }
 
-        return $destroyed;
-    }
+        $restored = $model->restore();
 
-    public function recovery($id)
-    {
-        $restored = $this->findById($id)->restore();
-
-        $this->clearCacheForMethod('FIND', [$id]);
         $this->clearCacheForEntity();
 
         return $restored;
     }
 
-    public function relationships(...$relationships)
+    public function forceDelete(): bool
     {
-        return $this->entity = $this->entity->with($relationships);
+        $restored = false;
+
+        $model = $this->entity->withTrashed(true)->find($this->id);
+        $id = $model->getKey();
+
+        if ($model->trashed()) {
+            foreach ($this->relationships as $relationship) {
+                $model->$relationship()->whereNotNull('deleted_at')->forceDelete();
+            }
+
+            $restored = $model->forceDelete();
+        }
+
+        $this->clearCacheForEntity();
+
+        return $restored;
     }
 
-    public function paginate($totalPage = 10)
+    public function paginate($totalPage = 10): array
     {
-        $data = $this->entity->withTrashed($this->Trashed())->paginate($totalPage);
+        $data = $this->Trashed() ? $this->entity->withTrashed(true)->paginate($totalPage) :
+            $this->entity->paginate($totalPage);
+
         return [
             'data' => $data->items(),
             'recordsFiltered' => 0,
@@ -206,7 +253,7 @@ abstract class BaseRepository implements RepositoryInterface
     public function dataTable()
     {
         return $this->rememberCache(function () {
-            return $this->entity->withTrashed($this->Trashed())->get();
+            return $this->applySoftDeletes($this->entity)->get();
         }, Repository::$methodDataTable);
     }
 
@@ -217,7 +264,25 @@ abstract class BaseRepository implements RepositoryInterface
         }
 
         return $this->rememberCache(function () use ($column, $order) {
-            $this->entity->withTrashed($this->Trashed())->orderBy($column, $order)->get();
+            return $this->applySoftDeletes($this->entity)->orderBy($column, $order)->get();
         }, Repository::$methodOrder);
+    }
+
+    public function relationships(...$relationships): static
+    {
+        $this->relationships = $relationships;
+        $this->entity = $this->entity->with($relationships);
+        return $this;
+    }
+
+    public function useTrashed(string $permission): static
+    {
+        $this->permission = $permission;
+        return $this;
+    }
+
+    private function applySoftDeletes($query)
+    {
+        return $this->Trashed() ? $query->withTrashed(true) : $query;
     }
 }

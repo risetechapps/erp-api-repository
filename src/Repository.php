@@ -7,6 +7,7 @@ class Repository
     public static array $driverNotSupported = ["file"];
 
 
+    public static string $methodFirst = 'FIRST';
     public static string $methodAll = 'ALL';
     public static string $methodFind = 'FIND';
     public static string $methodFindWhere = 'FIND_WHERE';
