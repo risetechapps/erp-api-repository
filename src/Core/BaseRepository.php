@@ -45,7 +45,7 @@ abstract class BaseRepository implements RepositoryInterface
     public function Trashed(): bool
     {
         if ($this->containsSoftDelete()) {
-            if (auth()->check() && auth()->hasPermission($this->permission)) {
+            if (auth()->check() && auth()->user()->hasPermission($this->permission)) {
                 return true;
             }
         }
