@@ -19,6 +19,7 @@ abstract class BaseRepository implements RepositoryInterface
     protected string $permission = '';
     protected $relationships = [];
     protected string|int $id;
+    protected bool $hasContainsSoftDelete = false;
 
     /**
      * @throws NotEntityDefinedException
@@ -26,6 +27,7 @@ abstract class BaseRepository implements RepositoryInterface
     public function __construct()
     {
         $this->entity = $this->resolveEntity();
+        $this->hasContainsSoftDelete = $this->containsSoftDelete();
         $this->tll = Carbon::now()->addHours(24);
         $this->driver = Cache::getDefaultDriver();
         $this->supportTag = !in_array($this->driver, Repository::$driverNotSupported);
@@ -44,7 +46,7 @@ abstract class BaseRepository implements RepositoryInterface
 
     public function Trashed(): bool
     {
-        if ($this->containsSoftDelete()) {
+        if ($this->hasContainsSoftDelete) {
             if (auth()->check() && auth()->user()->hasPermission($this->permission)) {
                 return true;
             }
@@ -54,7 +56,7 @@ abstract class BaseRepository implements RepositoryInterface
 
     public function containsSoftDelete(): bool
     {
-        return collect(class_uses_recursive(app($this->entity)))->contains(SoftDeletes::class);
+        return collect(class_uses_recursive($this->entity))->contains(SoftDeletes::class);
     }
 
     private function getQualifyTagCache(string $method, array $parameters = []): string
