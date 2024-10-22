@@ -54,7 +54,7 @@ abstract class BaseRepository implements RepositoryInterface
 
     public function containsSoftDelete(): bool
     {
-        return collect(class_uses_recursive($this->entity))->contains(SoftDeletes::class);
+        return collect(class_uses_recursive(app($this->entity)))->contains(SoftDeletes::class);
     }
 
     private function getQualifyTagCache(string $method, array $parameters = []): string

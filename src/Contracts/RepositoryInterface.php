@@ -36,4 +36,6 @@ interface RepositoryInterface
     public function dataTable();
 
     public function orderBy($column, $order = 'DESC');
+
+    public function useTrashed($permission): static;
 }
