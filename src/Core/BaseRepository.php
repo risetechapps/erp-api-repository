@@ -273,7 +273,16 @@ abstract class BaseRepository implements RepositoryInterface
     public function relationships(...$relationships): static
     {
         $this->relationships = $relationships;
-        $this->entity = $this->entity->with($relationships);
+        // $this->entity = $this->entity->with($relationships);
+
+        $this->entity = $this->entity->with(array_map(function ($relationship) {
+            return function ($query) {
+                if ($this->hasContainsSoftDelete) {
+                    $this->applySoftDeletes($query->withTrashed());
+                }
+            };
+        }, $relationships));
+
         return $this;
     }
 
