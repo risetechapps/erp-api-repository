@@ -45,7 +45,7 @@ abstract class BaseRepository implements RepositoryInterface
     }
 
     public function Trashed(): bool
-    {
+    {   
         if ($this->hasContainsSoftDelete) {
             if (auth()->check() && auth()->user()->hasPermission($this->permission)) {
                 return true;
@@ -272,16 +272,22 @@ abstract class BaseRepository implements RepositoryInterface
 
     public function relationships(...$relationships): static
     {
-        $this->relationships = $relationships;
-        // $this->entity = $this->entity->with($relationships);
 
-        $this->entity = $this->entity->with(array_map(function ($relationship) {
-            return function ($query) {
-                if ($this->hasContainsSoftDelete) {
-                    $this->applySoftDeletes($query->withTrashed());
-                }
-            };
-        }, $relationships));
+        $this->relationships = [];
+
+        foreach ($relationships as $relationship) {
+
+            if ($this->hasContainsSoftDelete && $this->Trashed()) {
+
+                $this->relationships[$relationship] = function ($query) {
+                    $query->withTrashed();
+                };
+            } else {
+                $this->relationships[] = $relationship;
+            }
+        }
+
+        $this->entity = $this->entity->with($this->relationships);
 
         return $this;
     }
