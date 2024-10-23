@@ -86,16 +86,20 @@ abstract class BaseRepository implements RepositoryInterface
             Cache::tags([get_class($this->entity)])->flush();
         }
 
-        dispatch(new RegenerateCacheJob($this, [
-            Repository::$methodFirst,
-            Repository::$methodAll,
-            Repository::$methodFind,
-            Repository::$methodFindWhere,
-            Repository::$methodFindWhereEmail,
-            Repository::$methodFindWhereFirst,
-            Repository::$methodDataTable,
-            Repository::$methodOrder,
-        ], $parameters));
+        try{
+            dispatch(new RegenerateCacheJob($this, [
+                Repository::$methodFirst,
+                Repository::$methodAll,
+                Repository::$methodFind,
+                Repository::$methodFindWhere,
+                Repository::$methodFindWhereEmail,
+                Repository::$methodFindWhereFirst,
+                Repository::$methodDataTable,
+                Repository::$methodOrder,
+            ], $parameters));
+        }catch(\Exception $exception){
+
+        }
 
         $this->clearParameterizedCaches($method, $parameters);
     }
