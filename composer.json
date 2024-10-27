@@ -1,5 +1,5 @@
 {
-    "name": "risetechapps/repository",
+    "name": "risetechapps/erp-api-repository",
     "description": "",
     "keywords": [
         "risetechapps",
@@ -7,7 +7,7 @@
         "repository",
         "Model"
     ],
-    "homepage": "https://github.com/risetechapps/repository",
+    "homepage": "https://github.com/risetechapps/erp-api-repository",
     "license": "MIT",
     "type": "library",
     "authors": [
