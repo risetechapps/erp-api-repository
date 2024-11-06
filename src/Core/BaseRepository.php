@@ -75,7 +75,7 @@ abstract class BaseRepository implements RepositoryInterface
         $cacheKey = $this->getQualifyTagCache($method, $parameters);
 
         if ($this->supportTag) {
-            return Cache::tags([get_class($this->entity)])->remember($cacheKey, $this->tll, $call);
+            return Cache::tags([$this->entity()])->remember($cacheKey, $this->tll, $call);
         } else {
             return Cache::remember($cacheKey, $this->tll, $call);
         }
