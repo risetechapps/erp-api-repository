@@ -61,8 +61,9 @@ abstract class BaseRepository implements RepositoryInterface
 
     private function getQualifyTagCache(string $method, array $parameters = []): string
     {
+        $entityClass = get_class($this->entity);
         $paramsHash = !empty($parameters) ? '_' . md5(json_encode($parameters)) : '';
-        $name = DIRECTORY_SEPARATOR . $method . $paramsHash;
+        $name = $entityClass . DIRECTORY_SEPARATOR . $method . $paramsHash;
 
         if ($this->Trashed()) $name .= '_TRASHED';
 
